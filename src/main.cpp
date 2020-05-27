@@ -35,6 +35,15 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
 
+#include "imgui.cpp"
+#include "imgui_impl_sdl.cpp"
+#include "imgui_impl_opengl3.cpp"
+
+#include "imgui_demo.cpp"
+#include "imgui_draw.cpp"
+#include "imgui_widgets.cpp"
+
+
 #define LOCAL_ADAPTER_IP_ADDRESS "192.168.137.9" // ipconfig in cmd prompt on cheat machine, find local address, fill it in here
 #define MACHINE_PLAYING_GAME_IP_ADDRESS "192.168.137.1" // the local IP address of the machine communicating with EFT servers
 
@@ -877,7 +886,7 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                     }
 
                     std::string val(16, '\0');
-                    val.resize(std::snprintf(val.data(), val.size(), "%.1f", total_val / 1000.0f));
+                    val.resize(snprintf(val.data(), val.size(), "%.1f", total_val / 1000.0f));
                     std::string name_and_val = obs->name + " (" + val + "k)";
                     draw_text(obs->pos.x, obs->pos.y + 2.0f, obs->pos.z, 0.05f, name_and_val.c_str(), r, g, b, get_alpha_for_y(player_y, obs->pos.y), &view, &projection);
                 }
