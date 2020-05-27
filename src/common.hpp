@@ -4,6 +4,9 @@
 #include <mutex>
 #include <vector>
 #include <algorithm>
+#include <math.h>
+
+#define PI 3.14159265
 
 extern std::mutex g_world_lock;
 
@@ -113,6 +116,12 @@ public:
 		x = std::clamp(x, min.x, max.x);
 		y = std::clamp(y, min.y, max.y);
 		z = std::clamp(z, min.z, max.z);
+	}
+
+	static Vector3 fromDegrees(float deg)
+	{
+		return Vector3(1*sin(deg * PI / 180.0f), -1*cos(deg * PI / 180.0f));
+
 	}
 };
 
