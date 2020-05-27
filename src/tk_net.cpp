@@ -177,6 +177,16 @@ namespace tk
         }
     }
 
+    int getWorth(tk::Observer ob)
+    {
+        int tot1 = 0;
+        for (tk::LootEntry& entry : ob.inventory)
+        {
+            tot1 += entry.value;
+        }
+        return tot1;
+    }
+
     Observer deserialize_initial_state(ByteStream* stream)
     {
         // now see async Task method_92(NetworkReader reader)
@@ -229,6 +239,7 @@ namespace tk
             }
 
             obs.type = is_scav ? Observer::Scav : Observer::Player;
+            obs.worth = getWorth(obs);
             obs.is_npc = is_scav && info_level == 1;
             obs.id = id;
             obs.group_id = info_group_id;
@@ -340,6 +351,8 @@ namespace tk
 
     void skip_misc_stuff(BitStream& bstream)
     {
+        bstream.ReadBool();
+
         if (bstream.ReadBool())
         {
             bstream.ReadUInt8();

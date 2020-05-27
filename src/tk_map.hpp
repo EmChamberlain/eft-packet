@@ -43,6 +43,7 @@ namespace tk
         Vector3 rot;
 
         int level = 0;
+        int worth = 0;
         bool is_dead = false;
         bool is_npc = false;
         bool is_unspawned = false;

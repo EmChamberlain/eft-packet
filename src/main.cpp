@@ -1,3 +1,4 @@
+
 #include "pcap++/IPv4Layer.h"
 #include "pcap++/IPv6Layer.h"
 #include "pcap++/Packet.h"
@@ -5,8 +6,10 @@
 #include "pcap++/PcapLiveDeviceList.h"
 #include "pcap++/UdpLayer.h"
 
+#include <Windows.h>
 #include "gl/glew.h"
 #include "gl/glu.h"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
@@ -28,8 +31,12 @@
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
 
-#define LOCAL_ADAPTER_IP_ADDRESS "YOUR.IP.ADDR.HERE" // ipconfig in cmd prompt on cheat machine, find local address, fill it in here
-#define MACHINE_PLAYING_GAME_IP_ADDRESS "YOUR.GAMEIP.ADDR.HERE" // the local IP address of the machine communicating with EFT servers
+#include "imgui.h"
+#include "imgui_impl_sdl.h"
+#include "imgui_impl_opengl3.h"
+
+#define LOCAL_ADAPTER_IP_ADDRESS "Change me" // ipconfig in cmd prompt on cheat machine, find local address, fill it in here
+#define MACHINE_PLAYING_GAME_IP_ADDRESS "Change me" // the local IP address of the machine communicating with EFT servers
 
 struct Packet
 {
@@ -61,17 +68,31 @@ struct GraphicsState
     int height;
 };
 
+float FOV = 59.0f;
+bool displayTop = false;
+bool twod = false;
+bool loot = false;
+bool players = false;
+
+
+
 void do_net(std::vector<Packet> work, const char* packet_dump_path);
-void do_render(GraphicsState* state);
+void do_render(GraphicsState* state, ImGuiIO io);
+
 
 GraphicsState make_gfx(SDL_GLContext ctx, SDL_Window* window);
 void resize_gfx(GraphicsState* state, int width, int height);
+
+static bool RadarMenuActive = true;
 
 int SDL_main(int argc, char* argv[])
 {
     const char* packet_dump_path = argc >= 2 ? argv[1] : nullptr;
     bool dump_packets = argc >= 3 && argv[2][0] == '1';
-
+    for (int i = 0; i < argc; i++)
+    {
+        std::cout << "arg[" << i << "]: " << argv[i] << std::endl;
+    }
     static int s_base_time = GetTickCount();
     static float time_scale = argc >= 4 ? atof(argv[3]) : 1.0f;
 
@@ -79,41 +100,42 @@ int SDL_main(int argc, char* argv[])
     pcpp::PcapLiveDevice* dev = nullptr;
 
     WorkGroup work;
-
+    
     if (packet_dump_path && !dump_packets)
     {
+        std::cout << "Inside the dump function" << std::endl;
         // We load packets for offline replay on another thread.
         processing_thread = std::make_unique<std::thread>(
             [packet_dump_path, &work]()
-        {
-            FILE* file = fopen(packet_dump_path, "rb");
-
-            bool outbound;
-            while (fread(&outbound, sizeof(outbound), 1, file) == 1)
             {
-                int timestamp;
-                fread(&timestamp, 4, 1, file);
-
-                int size;
-                fread(&size, 4, 1, file);
-
-                std::vector<uint8_t> packet;
-                packet.resize(size);
-                fread(packet.data(), size, 1, file);
-
-                static int s_first_packet_time = timestamp;
-
-                while ((GetTickCount() - s_base_time) * time_scale < (uint32_t)timestamp - s_first_packet_time)
+                FILE* file = fopen(packet_dump_path, "rb");
+                int it = 0;
+                bool outbound;
+                while (fread(&outbound, sizeof(outbound), 1, file) == 1)
                 {
-                    std::this_thread::yield(); // sleep might be better? doesn't matter much
+                    int timestamp;
+                    fread(&timestamp, 4, 1, file);
+
+                    int size;
+                    fread(&size, 4, 1, file);
+
+                    std::vector<uint8_t> packet;
+                    packet.resize(size);
+                    fread(packet.data(), size, 1, file);
+
+                    static int s_first_packet_time = timestamp;
+
+                    while ((GetTickCount() - s_base_time) * time_scale < (uint32_t)timestamp - s_first_packet_time)
+                    {
+                        std::this_thread::yield(); // sleep might be better? doesn't matter much
+                    }
+
+                    std::lock_guard<std::mutex> lock(work.work_guard);
+                    work.work.push_back({ timestamp, outbound, std::move(packet) });
                 }
-
-                std::lock_guard<std::mutex> lock(work.work_guard);
-                work.work.push_back({ timestamp, outbound, std::move(packet) });
-            }
-
-            fclose(file);
-        });
+                std::cout << "Exiting..." << std::endl;
+                fclose(file);
+            });
     }
     else
     {
@@ -127,40 +149,41 @@ int SDL_main(int argc, char* argv[])
 
         dev->startCapture(
             [](pcpp::RawPacket* packet, pcpp::PcapLiveDevice* dev, void* user_data)
-        {
-            pcpp::Packet parsed(packet);
-
-            std::string src_ip;
-            std::string dst_ip;
-
-            if (pcpp::IPv4Layer* ip = parsed.getLayerOfType<pcpp::IPv4Layer>())
             {
-                src_ip = ip->getSrcIpAddress().toString();
-                dst_ip = ip->getDstIpAddress().toString();
-            }
-            else if (pcpp::IPv6Layer* ip = parsed.getLayerOfType<pcpp::IPv6Layer>())
-            {
-                src_ip = ip->getSrcIpAddress().toString();
-                dst_ip = ip->getDstIpAddress().toString();
-            }
+                pcpp::Packet parsed(packet);
 
-            pcpp::UdpLayer* udp = parsed.getLayerOfType<pcpp::UdpLayer>();
-            int len = udp->getDataLen() - udp->getHeaderLen();
-            uint8_t* data_start = udp->getDataPtr(udp->getHeaderLen());
+                std::string src_ip;
+                std::string dst_ip;
 
-            int timestamp = (int)(GetTickCount() - s_base_time);
-            bool outbound = src_ip == MACHINE_PLAYING_GAME_IP_ADDRESS;
-            std::vector<uint8_t> data;
-            data.resize(len);
-            memcpy(data.data(), data_start, len);
+                if (pcpp::IPv4Layer* ip = parsed.getLayerOfType<pcpp::IPv4Layer>())
+                {
+                    src_ip = ip->getSrcIpAddress().toString();
+                    dst_ip = ip->getDstIpAddress().toString();
+                }
+                else if (pcpp::IPv6Layer* ip = parsed.getLayerOfType<pcpp::IPv6Layer>())
+                {
+                    src_ip = ip->getSrcIpAddress().toString();
+                    dst_ip = ip->getDstIpAddress().toString();
+                }
 
-            WorkGroup& work = *(WorkGroup*)user_data;
-            std::lock_guard<std::mutex> lock(work.work_guard);
-            work.work.push_back({ timestamp , outbound, std::move(data), std::move(src_ip), std::move(dst_ip) });
-        }, &work);
+                pcpp::UdpLayer* udp = parsed.getLayerOfType<pcpp::UdpLayer>();
+                int len = udp->getDataLen() - udp->getHeaderLen();
+                uint8_t* data_start = udp->getDataPtr(udp->getHeaderLen());
+
+                int timestamp = (int)(GetTickCount() - s_base_time);
+                bool outbound = src_ip == MACHINE_PLAYING_GAME_IP_ADDRESS;
+                std::vector<uint8_t> data;
+                data.resize(len);
+                memcpy(data.data(), data_start, len);
+
+                WorkGroup& work = *(WorkGroup*)user_data;
+                std::lock_guard<std::mutex> lock(work.work_guard);
+                work.work.push_back({ timestamp , outbound, std::move(data), std::move(src_ip), std::move(dst_ip) });
+            }, &work);
     }
 
     SDL_Init(SDL_INIT_EVERYTHING);
+    const char* glsl_version = "#version 330";
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -169,8 +192,9 @@ int SDL_main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 8);
 
-    SDL_Window* win = SDL_CreateWindow("Untitled - Paint", 100, 100, 1024, 768, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    SDL_Window* win = SDL_CreateWindow("Fuck Nikita, learn packet encryption", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
+    SDL_GL_MakeCurrent(win, ctx);
 
     glewInit();
     SDL_GL_SetSwapInterval(1);
@@ -179,29 +203,39 @@ int SDL_main(int argc, char* argv[])
 
     bool quit = false;
 
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplSDL2_InitForOpenGL(gfx.window, gfx.ctx);
+    ImGui_ImplOpenGL3_Init(glsl_version);
+
     std::unique_ptr<std::thread> net_thread = std::make_unique<std::thread>(
         [&]()
-    {
-        while (!quit)
         {
-            std::vector<Packet> local_work;
-
+            while (!quit)
             {
-                std::lock_guard<std::mutex> lock(work.work_guard);
-                std::swap(local_work, work.work);
-            }
+                std::vector<Packet> local_work;
 
-            if (!local_work.empty())
-            {
-                do_net(std::move(local_work), dump_packets ? packet_dump_path : nullptr);
-            }
-            else
-            {
-                SDL_Delay(10);
-            }
-        }
-    });
+                {
+                    std::lock_guard<std::mutex> lock(work.work_guard);
+                    std::swap(local_work, work.work);
+                }
 
+                if (!local_work.empty())
+                {
+                    do_net(std::move(local_work), dump_packets ? packet_dump_path : nullptr);
+                }
+                else
+                {
+                    SDL_Delay(10);
+                }
+            }
+        });
     while (!quit)
     {
         SDL_Event e;
@@ -219,8 +253,18 @@ int SDL_main(int argc, char* argv[])
                 }
             }
         }
-
-        do_render(&gfx);
+        if (GetKeyState(VK_LEFT) & 0x8000)
+        {
+            
+            RadarMenuActive = !RadarMenuActive;
+        }
+        if (GetKeyState(VK_RIGHT) & 0x8000)
+        {
+            
+            displayTop = true;
+        }
+        
+        do_render(&gfx, io);
     }
 
     net_thread->join();
@@ -239,7 +283,7 @@ int SDL_main(int argc, char* argv[])
         dev->stopCapture();
         dev->close();
     }
-
+    
     return 0;
 }
 
@@ -248,6 +292,11 @@ struct FragmentedMessage
     int parts;
     std::vector<std::unique_ptr<std::vector<uint8_t>>> packets;
 };
+
+bool retVal(tk::Observer *one, tk::Observer *two)
+{
+    return(one->worth > two->worth);
+}
 
 void do_net(std::vector<Packet> work, const char* packet_dump_path)
 {
@@ -300,7 +349,7 @@ void do_net(std::vector<Packet> work, const char* packet_dump_path)
         bool no_state = tk::g_state == nullptr;
         bool no_server = no_state || tk::g_state->server_ip.empty();
         bool filtered_out = no_server ||
-            (tk::g_state->server_ip != packet.src_ip &&
+            (   tk::g_state->server_ip != packet.src_ip &&
                 tk::g_state->server_ip != packet.dst_ip &&
                 tk::g_state->server_ip != "LOCAL_REPLAY");
 
@@ -324,7 +373,7 @@ void do_net(std::vector<Packet> work, const char* packet_dump_path)
 
         UNET::AcksCache* received_acks = packet.outbound ? s_outbound_acks.get() : s_inbound_acks.get();
 
-        UNET::MessageExtractor messageExtractor((char*)data_start, data_len, 3 + (102 * 2), received_acks);
+        UNET::MessageExtractor messageExtractor((char*)data_start, data_len, 3 + (102*2), received_acks);
         while (messageExtractor.GetNextMessage())
         {
             std::unique_ptr<std::vector<uint8_t>> complete_message;
@@ -421,25 +470,25 @@ bool get_loot_information(tk::LootEntry* entry, bool include_equipment, bool* dr
     // If it's an item in the list, draw a big ass red beam
     // You can change this to whatever you like. Another way to do it is with the json
     // Note that when rendered in game that underscores and spaces are removed
-    // Here you want to put the "name" field from db_locals.json
-    if (entry->name == "SVDS 7.62x54 Sniper rifle" || entry->name == "Keytool") {
+    // Here you want to put the "name" field from db_locals.json 
+    if (entry->name == "Lab. Red keycard" || entry->name == "Keytool" || entry->name == "Lab. Green keycard" || entry->name == "Lab. Green keycard" || entry->name == "Military COFDM wireless Signal Transmitter" || entry->name == "Graphics card" || entry->name == "Paracord" || entry->name == "TerraGroup Labs access keycard" || entry->name == "Golden Star Balm (10/10)") {
         draw = true;
         *r = 255; // The red value of the beam
         *g = 0; // green
-        *b = 0; // blue
+        *b = 255; // blue
         *draw_beam = true; // whether or not to draw the beam
         *beam_height = 200.0f; // How tall into the sky the beam is
         *draw_text = !entry->unknown; // Draw the text as long as its id is in our database
     }
     // Else if it is superrare just draw a black box
     // Note that a ton of stupid items are superrare like IFAKs
-    else if (entry->rarity == tk::LootItem::Rarity::SuperRare) {
+    else if (entry->value >= 30000) {
         draw = true;
         *r = 0;
         *g = 0;
         *b = 255;
         *draw_beam = true;
-        *beam_height = 150.0f;
+        *beam_height = 20.0f;
         *draw_text = !entry->unknown;
     }
     // Else don't draw it at all
@@ -456,17 +505,17 @@ bool get_loot_information(tk::LootEntry* entry, bool include_equipment, bool* dr
     {
         draw = true;
         *draw_beam = true;
-        *beam_height = 200.0f;
+        *beam_height = 50.0f;
         *draw_text = true;
         *r = 153;
         *g = 101;
         *b = 21;
     }
-
+ 
     return draw;
 }
 
-void do_render(GraphicsState* gfx)
+void do_render(GraphicsState* gfx, ImGuiIO io)
 {
     // ye who read this code, judge its performance (and lack of state caching) not
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
@@ -477,7 +526,55 @@ void do_render(GraphicsState* gfx)
 
         if (tk::g_state && tk::g_state->map)
         {
-            glm::mat4 projection = glm::perspective(glm::radians(75.0f), (float)gfx->width / (float)gfx->height, 0.1f, 2000.0f);
+
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplSDL2_NewFrame(gfx->window);
+            ImGui::NewFrame();
+            {
+                if (RadarMenuActive)
+                {
+                    ImGui::Begin("Settings", &RadarMenuActive, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_AlwaysAutoResize);
+                    if (ImGui::BeginMenuBar())
+                    {
+                        if (ImGui::BeginMenu("File"))
+                        {
+                            if (ImGui::MenuItem("Close"))
+                            {
+                                RadarMenuActive = false;
+                            }
+                            ImGui::EndMenu();
+                        }
+                        ImGui::EndMenuBar();
+                    }
+                    ImGui::SliderFloat("FOV", &FOV, 1.0f, 100.0f);
+                    ImGui::SameLine();
+                    if(ImGui::Button("Reset"))
+                    {
+                        FOV = 59.0f;
+                    }
+                    ImGui::Checkbox("2D Radar", &twod);
+                    ImGui::Checkbox("Loot Filter", &loot);
+                    ImGui::Checkbox("Players", &players);
+                    ImGui::Text("% .1f FPS ", ImGui::GetIO().Framerate);
+                    ImGui::End();
+                }
+            }
+
+            if (twod)
+            {
+                ImGui::Begin("2D Radar", &twod);
+
+                ImGui::End();
+
+            }
+            if (loot)
+            {
+                ImGui::Begin("Loot Filter", &loot);
+
+                ImGui::End();
+            }
+
+            glm::mat4 projection = glm::perspective(glm::radians(FOV), (float)gfx->width / (float)gfx->height, 0.1f, 2000.0f);
 
             // flip x axis, from right handed (gl) to left handed (unity)
             projection = glm::scale(projection, glm::vec3(-1.0f, 1.0f, 1.0f));
@@ -514,7 +611,7 @@ void do_render(GraphicsState* gfx)
                 glUniformMatrix4fv(glGetUniformLocation(gfx->shader, "view"), 1, GL_FALSE, &view[0][0]);
 
                 auto draw_text = [&gfx]
-                (float x, float y, float z, float scale, const char* txt, int r, int g, int b, int a, glm::mat4* view, glm::mat4* proj)
+                    (float x, float y, float z, float scale, const char* txt, int r, int g, int b, int a, glm::mat4* view, glm::mat4* proj)
                 {
                     GLTtext* text = gltCreateText();
                     gltSetText(text, txt);
@@ -526,7 +623,7 @@ void do_render(GraphicsState* gfx)
                 };
 
                 auto draw_box = [&gfx]
-                (float x, float y, float z, float scale_x, float scale_y, float scale_z, int r, int g, int b)
+                    (float x, float y, float z, float scale_x, float scale_y, float scale_z, int r, int g, int b)
                 {
                     glm::mat4 model = glm::mat4(1.0f);
                     glm::vec3 pos(x, y, z);
@@ -541,9 +638,8 @@ void do_render(GraphicsState* gfx)
                     glDrawArrays(GL_TRIANGLES, 0, 36);
                 };
 
-
                 auto draw_line = [&gfx]
-                (float x, float y, float z, float to_x, float to_y, float to_z, int r, int g, int b, int a)
+                    (float x, float y, float z, float to_x, float to_y, float to_z, int r, int g, int b, int a)
                 {
                     float vertices[] =
                     {
@@ -561,7 +657,59 @@ void do_render(GraphicsState* gfx)
                 };
 
                 static std::unordered_map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> s_group_map; // maybe reset on map change?
+                //std::chrono::system_clock::time_point tp = sysClock.now();
+                if(players)
+                {
+                    std::vector<tk::Observer*> obser = tk::g_state->map->get_observers();
+                    std::sort(obser.begin(), obser.end(), retVal);
 
+                    ImGui::Begin("Players", &players, ImGuiWindowFlags_AlwaysAutoResize);
+                    if (ImGui::CollapsingHeader("PMCs"))
+                    {
+                        for (tk::Observer* ob : obser)
+                        {
+                            if (ob->type == tk::Observer::Player)
+                            {
+                                std::string val = ob->name + " (" + std::to_string(ob->worth) + ")";
+                                if(ImGui::TreeNode(val.c_str()))
+                                {
+                                    //ImGui::PushID(ob);
+                                    for (tk::LootEntry& entry : ob->inventory)
+                                    {
+                                        ImGui::Text(entry.name.c_str());
+                                    }
+                                    ImGui::TreePop();
+                                    //ImGui::PopID();
+                                }
+                            }
+                        }
+                        //ImGui::TreePop();
+                    }
+                    if (ImGui::CollapsingHeader("Scavs"))
+                    {
+                        for (tk::Observer* ob : obser)
+                        {
+                            if (ob->type == tk::Observer::Scav)
+                            {
+                                std::string val = ob->name + " (" + std::to_string(ob->worth) + ")";
+                                if(ImGui::TreeNode(val.c_str()))
+                                {
+                                    //ImGui::PushID(ob);
+                                    for (tk::LootEntry& entry : ob->inventory)
+                                    {
+                                        ImGui::Text(entry.name.c_str());
+                                    }
+                                    ImGui::TreePop();
+                                    //ImGui::PopID();
+                                }
+                            }
+                        }
+                        
+                    }
+                    ImGui::End();
+                }
+              
+                // Render Players/Scavs/Other
                 for (tk::Observer* obs : tk::g_state->map->get_observers())
                 {
                     if (obs->type == tk::Observer::Self)
@@ -594,11 +742,21 @@ void do_render(GraphicsState* gfx)
                             scale_x = 2.0f;
                             scale_y = 1.0f;
                         }
-
-                        if (obs->type == tk::Observer::Scav && obs->is_npc)
+                        
+                        if (obs->type == tk::Observer::Scav && obs->is_npc && obs->name._Equal("Scavassault")) // Regular Scav
                         {
                             r = 255;
                             g = obs->is_dead ? 140 : 255;
+                        }
+                        else if (obs->type == tk::Observer::Scav && !obs->is_npc) // Playerscav 
+                        {
+                            r = 255;
+                            b = obs->is_dead ? 137 : 255;
+                        }
+                        else if (obs->type == tk::Observer::Scav && !obs->name._Equal("Scavassault")) // Raider
+                        {
+                            g = 137;
+                            b = 137;
                         }
                         else
                         {
@@ -637,7 +795,6 @@ void do_render(GraphicsState* gfx)
                 {
                     draw_box(pos->x, pos->y, pos->z, 2.0f, 1.0f, 1.0f, 102, 0, 102);
                 }
-
 
                 std::vector<std::tuple<Vector3, std::string, int, int, int>> loot_text_to_render;
 
@@ -729,10 +886,11 @@ void do_render(GraphicsState* gfx)
                 {
                     draw_text(pos.x, pos.y + 0.5f, pos.z, 0.05f, txt.c_str(), r, g, b, get_alpha_for_y(player_y, pos.y), &view, &projection);
                 }
-
                 // TODO: Render
                 // Sort text by distance from camera and render in order to fix transparency overlap.
             }
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
     }
 

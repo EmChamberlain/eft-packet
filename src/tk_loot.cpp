@@ -1,7 +1,6 @@
 #include "tk_loot.hpp"
 #include "json11.hpp"
 #include <cassert>
-#include <iostream>
 
 namespace tk
 {
@@ -28,7 +27,6 @@ namespace tk
 
                 std::string err;
                 json = json11::Json::parse(data.data(), err, json11::COMMENTS);
-                
             }
 
             return json;
@@ -82,7 +80,7 @@ namespace tk
                     iter->second.name = data_entry["name"].string_value();
                 }
             }
-
+ 
         }
 
         { // Third pass - correct price.
@@ -157,45 +155,45 @@ namespace tk
 
         switch (type)
         {
-        case Polymorph::Type::FoodDrinkComponentDescriptor: return make_polymorph<FoodDrinkComponentDescriptor>(stream, type);
-        case Polymorph::Type::ResourceItemComponentDescriptor: return make_polymorph<ResourceItemComponentDescriptor>(stream, type);
-        case Polymorph::Type::LightComponentDescriptor: return make_polymorph<LightComponentDescriptor>(stream, type);
-        case Polymorph::Type::LockableComponentDescriptor: return make_polymorph<LockableComponentDescriptor>(stream, type);
-        case Polymorph::Type::MapComponentDescriptor: return make_polymorph< MapComponentDescriptor>(stream, type);
-        case Polymorph::Type::MedKitComponentDescriptor: return make_polymorph<MedKitComponentDescriptor>(stream, type);
-        case Polymorph::Type::RepairableComponentDescriptor: return make_polymorph<RepairableComponentDescriptor>(stream, type);
-        case Polymorph::Type::SightComponentDescriptor: return make_polymorph<SightComponentDescriptor>(stream, type);
-        case Polymorph::Type::TogglableComponentDescriptor: return make_polymorph<TogglableComponentDescriptor>(stream, type);
-        case Polymorph::Type::FaceShieldComponentDescriptor: return make_polymorph<FaceShieldComponentDescriptor>(stream, type);
-        case Polymorph::Type::FoldableComponentDescriptor: return make_polymorph<FoldableComponentDescriptor>(stream, type);
-        case Polymorph::Type::FireModeComponentDescriptor: return make_polymorph<FireModeComponentDescriptor>(stream, type);
-        case Polymorph::Type::DogTagComponentDescriptor: return make_polymorph<DogTagComponentDescriptor>(stream, type);
-        case Polymorph::Type::TagComponentDescriptor: return make_polymorph<TagComponentDescriptor>(stream, type);
-        case Polymorph::Type::KeyComponentDescriptor: return make_polymorph<KeyComponentDescriptor>(stream, type);
-        case Polymorph::Type::JsonLootItemDescriptor: return make_polymorph<JsonLootItemDescriptor>(stream, type);
-        case Polymorph::Type::JsonCorpseDescriptor: return make_polymorph<JsonCorpseDescriptor>(stream, type);
-        case Polymorph::Type::InventorySlotItemAddressDescriptor: return make_polymorph<InventorySlotItemAddressDescriptor>(stream, type);
-        case Polymorph::Type::InventoryStackSlotItemAddress: return make_polymorph<InventoryStackSlotItemAddress>(stream, type);
-        case Polymorph::Type::InventoryContainerDescriptor: return make_polymorph<InventoryContainerDescriptor>(stream, type);
-        case Polymorph::Type::InventoryGridItemAddressDescriptor: return make_polymorph<InventoryGridItemAddressDescriptor>(stream, type);
-        case Polymorph::Type::InventoryOwnerItselfDescriptor: return make_polymorph<InventoryOwnerItselfDescriptor>(stream, type);
-        case Polymorph::Type::InventoryRemoveOperationDescriptor: return make_polymorph<InventoryRemoveOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryExamineOperationDescriptor: return make_polymorph<InventoryExamineOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryCheckMagazineOperationDescriptor: return make_polymorph<InventoryCheckMagazineOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryBindItemOperationDescriptor: return make_polymorph<InventoryBindItemOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryMoveOperationDescriptor: return make_polymorph<InventoryMoveOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventorySplitOperationDescriptor: return make_polymorph<InventorySplitOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryMergeOperationDescriptor: return make_polymorph<InventoryMergeOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryTransferOperationDescriptor: return make_polymorph<InventoryTransferOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventorySwapOperationDescriptor: return make_polymorph<InventorySwapOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryThrowOperationDescriptor: return make_polymorph<InventoryThrowOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryToggleOperationDescriptor: return make_polymorph<InventoryToggleOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryFoldOperationDescriptor: return make_polymorph<InventoryFoldOperationDescriptor>(stream, type);
-        case Polymorph::Type::InventoryShotOperationDescriptor: return make_polymorph<InventoryShotOperationDescriptor>(stream, type);
-        case Polymorph::Type::SetupItemOperationDescriptor: return make_polymorph<SetupItemOperationDescriptor>(stream, type);
-        case Polymorph::Type::ApplyHealthOperationDescriptor: return make_polymorph<ApplyHealthOperationDescriptor>(stream, type);
-        case Polymorph::Type::OperateStationaryWeaponOperationDescription: return make_polymorph<OperateStationaryWeaponOperationDescription>(stream, type);
-        default: __debugbreak(); assert(false); break;
+            case Polymorph::Type::FoodDrinkComponentDescriptor: return make_polymorph<FoodDrinkComponentDescriptor>(stream, type);
+            case Polymorph::Type::ResourceItemComponentDescriptor: return make_polymorph<ResourceItemComponentDescriptor>(stream, type);
+            case Polymorph::Type::LightComponentDescriptor: return make_polymorph<LightComponentDescriptor>(stream, type);
+            case Polymorph::Type::LockableComponentDescriptor: return make_polymorph<LockableComponentDescriptor>(stream, type);
+            case Polymorph::Type::MapComponentDescriptor: return make_polymorph< MapComponentDescriptor>(stream, type);
+            case Polymorph::Type::MedKitComponentDescriptor: return make_polymorph<MedKitComponentDescriptor>(stream, type);
+            case Polymorph::Type::RepairableComponentDescriptor: return make_polymorph<RepairableComponentDescriptor>(stream, type);
+            case Polymorph::Type::SightComponentDescriptor: return make_polymorph<SightComponentDescriptor>(stream, type);
+            case Polymorph::Type::TogglableComponentDescriptor: return make_polymorph<TogglableComponentDescriptor>(stream, type);
+            case Polymorph::Type::FaceShieldComponentDescriptor: return make_polymorph<FaceShieldComponentDescriptor>(stream, type);
+            case Polymorph::Type::FoldableComponentDescriptor: return make_polymorph<FoldableComponentDescriptor>(stream, type);
+            case Polymorph::Type::FireModeComponentDescriptor: return make_polymorph<FireModeComponentDescriptor>(stream, type);
+            case Polymorph::Type::DogTagComponentDescriptor: return make_polymorph<DogTagComponentDescriptor>(stream, type);
+            case Polymorph::Type::TagComponentDescriptor: return make_polymorph<TagComponentDescriptor>(stream, type);
+            case Polymorph::Type::KeyComponentDescriptor: return make_polymorph<KeyComponentDescriptor>(stream, type);
+            case Polymorph::Type::JsonLootItemDescriptor: return make_polymorph<JsonLootItemDescriptor>(stream, type);
+            case Polymorph::Type::JsonCorpseDescriptor: return make_polymorph<JsonCorpseDescriptor>(stream, type);
+            case Polymorph::Type::InventorySlotItemAddressDescriptor: return make_polymorph<InventorySlotItemAddressDescriptor>(stream, type);
+            case Polymorph::Type::InventoryStackSlotItemAddress: return make_polymorph<InventoryStackSlotItemAddress>(stream, type);
+            case Polymorph::Type::InventoryContainerDescriptor: return make_polymorph<InventoryContainerDescriptor>(stream, type);
+            case Polymorph::Type::InventoryGridItemAddressDescriptor: return make_polymorph<InventoryGridItemAddressDescriptor>(stream, type);
+            case Polymorph::Type::InventoryOwnerItselfDescriptor: return make_polymorph<InventoryOwnerItselfDescriptor>(stream, type);
+            case Polymorph::Type::InventoryRemoveOperationDescriptor: return make_polymorph<InventoryRemoveOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryExamineOperationDescriptor: return make_polymorph<InventoryExamineOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryCheckMagazineOperationDescriptor: return make_polymorph<InventoryCheckMagazineOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryBindItemOperationDescriptor: return make_polymorph<InventoryBindItemOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryMoveOperationDescriptor: return make_polymorph<InventoryMoveOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventorySplitOperationDescriptor: return make_polymorph<InventorySplitOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryMergeOperationDescriptor: return make_polymorph<InventoryMergeOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryTransferOperationDescriptor: return make_polymorph<InventoryTransferOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventorySwapOperationDescriptor: return make_polymorph<InventorySwapOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryThrowOperationDescriptor: return make_polymorph<InventoryThrowOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryToggleOperationDescriptor: return make_polymorph<InventoryToggleOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryFoldOperationDescriptor: return make_polymorph<InventoryFoldOperationDescriptor>(stream, type);
+            case Polymorph::Type::InventoryShotOperationDescriptor: return make_polymorph<InventoryShotOperationDescriptor>(stream, type);
+            case Polymorph::Type::SetupItemOperationDescriptor: return make_polymorph<SetupItemOperationDescriptor>(stream, type);
+            case Polymorph::Type::ApplyHealthOperationDescriptor: return make_polymorph<ApplyHealthOperationDescriptor>(stream, type);
+            case Polymorph::Type::OperateStationaryWeaponOperationDescription: return make_polymorph<OperateStationaryWeaponOperationDescription>(stream, type);
+            default: __debugbreak(); assert(false); break;
         }
 
         return nullptr;
@@ -255,14 +253,14 @@ namespace tk
     void SightComponentDescriptor::read(CSharpByteStream* stream)
     {
         sight_mode = stream->ReadInt32();
-
+        
         int num = stream->ReadInt32();
-        for (int i = 0; i < num; i++)
+        for(int i = 0; i < num; i++)
         {
             // Dumping these values for now
             auto dump = stream->ReadInt32();
         }
-
+ 
         int num2 = stream->ReadInt32();
         for (int i = 0; i < num2; i++)
         {
