@@ -28,6 +28,9 @@
 #include <unordered_map>
 #include <iostream>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #define GLT_IMPLEMENTATION
 #include "gltext.h"
 
@@ -84,6 +87,33 @@ bool twod = false;
 bool loot = false;
 bool players = false;
 
+
+class Floor
+{
+public:
+	int width = 0;
+	int height = 0;
+	GLuint texture = 0;
+
+	Floor(std::string fName)
+	{
+		LoadTextureFromFile(fName.c_str(), &texture, &width, &height);
+	}
+};
+
+class Map
+{
+public:
+	std::string name = "";
+	std::vector<Floor> floors;
+
+	Map()
+	{
+		floors = std::vector<Floor>();
+	}
+};
+
+Map factoryMap = Map();
 
 
 void do_net(std::vector<Packet> work, const char* packet_dump_path);
@@ -223,6 +253,10 @@ int SDL_main(int argc, char* argv[])
 
     ImGui_ImplSDL2_InitForOpenGL(gfx.window, gfx.ctx);
     ImGui_ImplOpenGL3_Init(glsl_version);
+
+	factoryMap.floors.push_back(Floor(""));
+
+
 
     std::unique_ptr<std::thread> net_thread = std::make_unique<std::thread>(
         [&]()
@@ -523,6 +557,38 @@ bool get_loot_information(tk::LootEntry* entry, bool include_equipment, bool* dr
     }
  
     return draw;
+}
+
+
+// Simple helper function to load an image into a OpenGL texture with common settings
+bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
+{
+	// Load from file
+	int image_width = 0;
+	int image_height = 0;
+	unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
+	if (image_data == NULL)
+		return false;
+
+	// Create a OpenGL texture identifier
+	GLuint image_texture;
+	glGenTextures(1, &image_texture);
+	glBindTexture(GL_TEXTURE_2D, image_texture);
+
+	// Setup filtering parameters for display
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Upload pixels into texture
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+	stbi_image_free(image_data);
+
+	*out_texture = image_texture;
+	*out_width = image_width;
+	*out_height = image_height;
+
+	return true;
 }
 
 
