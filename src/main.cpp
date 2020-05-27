@@ -44,8 +44,8 @@
 #include "imgui_widgets.cpp"
 
 
-#define LOCAL_ADAPTER_IP_ADDRESS "192.168.137.9" // ipconfig in cmd prompt on cheat machine, find local address, fill it in here
-#define MACHINE_PLAYING_GAME_IP_ADDRESS "192.168.137.1" // the local IP address of the machine communicating with EFT servers
+#define LOCAL_ADAPTER_IP_ADDRESS "192.168.137.1" // ipconfig in cmd prompt on cheat machine, find local address, fill it in here
+#define MACHINE_PLAYING_GAME_IP_ADDRESS "192.168.137.9" // the local IP address of the machine communicating with EFT servers
 
 struct Packet
 {
@@ -79,6 +79,9 @@ struct GraphicsState
 
 float FOV = 59.0f;
 float circleRadius = 5.0f;
+float lineLength = 100.0f;
+float zoomLevel = 1.0f;
+float tempAdd = 0.0f;
 bool displayTop = false;
 bool twod = false;
 bool loot = false;
@@ -531,11 +534,39 @@ void drawCircle(Vector3 player, Vector3 other, float rad, ImGuiCol color)
 {
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
 	auto guiWindowSize = Vector3(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
-	auto diff = other - player;
-	auto middle = guiWindowSize * 0.5f;
+	auto diff = Vector3((other - player).x, (other - player).z)*zoomLevel;
+    auto topLeft = Vector3(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y);
+	auto middle = topLeft + (guiWindowSize * 0.5f);
 	auto loc = (middle + diff);
-	loc.clamp(guiWindowSize);
-	draw_list->AddCircleFilled(ImVec2(loc.x, loc.y), rad, color);
+	//loc.clamp(topLeft, topLeft + guiWindowSize);
+	draw_list->AddCircleFilled(ImVec2(loc.x + (rad*0.5), loc.y + (rad*0.5)), rad, color);
+}
+
+void drawBox(Vector3 player, Vector3 other, float rad, ImGuiCol color)
+{
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    auto guiWindowSize = Vector3(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+    auto diff = Vector3((other - player).x, (other - player).z) * zoomLevel;
+    auto topLeft = Vector3(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y);
+    auto middle = topLeft + (guiWindowSize * 0.5f);
+    auto loc = (middle + diff);
+    //loc.clamp(topLeft, topLeft + guiWindowSize);
+    draw_list->AddRectFilled(ImVec2(loc.x , loc.y), ImVec2(loc.x + rad, loc.y + rad), color);
+}
+
+void drawLine(Vector3 player, Vector3 from, Vector3 to, ImGuiCol color)
+{
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    auto guiWindowSize = Vector3(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+    auto diffF = Vector3((from - player).x, (from - player).z) * zoomLevel;
+    auto diffT = Vector3((to - player).x, (to - player).z) * zoomLevel;
+    auto topLeft = Vector3(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y);
+    auto middle = topLeft + (guiWindowSize * 0.5f);
+    auto locF = (middle + diffF);
+    auto locT = (middle + diffT);
+    //locF.clamp(topLeft, topLeft + guiWindowSize);
+    //locT.clamp(topLeft, topLeft + guiWindowSize);
+    draw_list->AddLine(ImVec2(locF.x, locF.y), ImVec2(locT.x, locT.y), color);
 }
 
 void do_render(GraphicsState* gfx, ImGuiIO io)
@@ -583,7 +614,9 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
 		if (twod)
 		{
 			ImGui::Begin("Radar Settings", &twod);
-
+            ImGui::SliderFloat("Zoom", &zoomLevel, 0.5f, 5.0f);
+            ImGui::SliderFloat("Line Length", &lineLength, 10.0f, 1000.0f);
+            ImGui::SliderFloat("Temp Add", &tempAdd, 0.0f, 360.0f);
 			ImGui::End();
 
 		}
@@ -597,6 +630,8 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
         if (tk::g_state && tk::g_state->map)
         {
 			ImGui::Begin("Radar");
+            //ImGui::GetWindowDrawList()->AddCircleFilled(ImGui::GetCursorScreenPos(), 10.0f, ImColor(255, 0, 255));
+
 
             glm::mat4 projection = glm::perspective(glm::radians(FOV), (float)gfx->width / (float)gfx->height, 0.1f, 2000.0f);
 
@@ -694,7 +729,10 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                 {
                     if (obs->type == tk::Observer::Self)
                     {
-						drawCircle(player->pos, obs->pos, circleRadius, ImColor(255, 0, 0));
+						//drawCircle(player->pos, obs->pos, circleRadius, ImColor(0, 255, 0));
+                        auto unitV = Vector3::fromDegrees(player->rot.x + tempAdd) * lineLength;
+                        auto vecTo = Vector3(player->pos.x + unitV.x, player->pos.y, player->pos.z + unitV.y);
+                        drawLine(player->pos, player->pos, vecTo, ImColor(0, 255, 0));
                         continue;
                     }
 
@@ -767,12 +805,15 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
 
                     //draw_box(obs->pos.x, obs->pos.y, obs->pos.z, scale_x, scale_y, scale_z, r, g, b);
 					drawCircle(player->pos, obs->pos, circleRadius, ImColor(r, g, b));
+                    auto unitV = Vector3::fromDegrees(obs->rot.x) * lineLength;
+                    auto vecTo = Vector3(obs->pos.x + unitV.x, obs->pos.y, obs->pos.z + unitV.y);
+                    drawLine(player->pos, obs->pos, vecTo, ImColor(r, g, b));
                 }
 
                 for (Vector3* pos : tk::g_state->map->get_static_corpses())
                 {
                     //draw_box(pos->x, pos->y, pos->z, 2.0f, 1.0f, 1.0f, 102, 0, 102);
-					drawCircle(player->pos, *pos, circleRadius, ImColor(102, 0, 102));
+                    drawBox(player->pos, *pos, circleRadius, ImColor(102, 0, 102));
                 }
 
                 std::vector<std::tuple<Vector3, std::string, int, int, int>> loot_text_to_render;
@@ -804,7 +845,7 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                         }
 
                         //draw_box(entry->pos.x, entry->pos.y, entry->pos.z, 0.3f, 0.3f, 0.3f, r, g, b);
-						drawCircle(player->pos, entry->pos, circleRadius, ImColor(r, g, b));
+                        drawBox(player->pos, entry->pos, circleRadius, ImColor(r, g, b));
                     }
                 };
 
@@ -816,7 +857,7 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                 for (tk::TemporaryLoot* entry : tk::g_state->map->get_temporary_loots())
                 {
                     //draw_box(entry->pos.x, entry->pos.y + 1.5f, entry->pos.z, 0.15f, 3.0f, 0.15f, 0, 200, 200);
-					drawCircle(player->pos, entry->pos, circleRadius, ImColor(0, 200, 200));
+                    drawBox(player->pos, entry->pos, circleRadius, ImColor(0, 200, 200));
                     //draw_box(entry->pos.x, entry->pos.y, entry->pos.z, 0.25f, 0.25f, 0.25f, 0, 200, 200);
                 }
 
