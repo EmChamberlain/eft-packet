@@ -78,6 +78,7 @@ struct GraphicsState
 };
 
 float FOV = 59.0f;
+float circleRadius = 5.0f;
 bool displayTop = false;
 bool twod = false;
 bool loot = false;
@@ -201,7 +202,7 @@ int SDL_main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 8);
 
-    SDL_Window* win = SDL_CreateWindow("Fuck Nikita, learn packet encryption", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    SDL_Window* win = SDL_CreateWindow("Rad", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     SDL_GL_MakeCurrent(win, ctx);
 
@@ -524,6 +525,19 @@ bool get_loot_information(tk::LootEntry* entry, bool include_equipment, bool* dr
     return draw;
 }
 
+
+
+void drawCircle(Vector3 player, Vector3 other, float rad, ImGuiCol color)
+{
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	auto guiWindowSize = Vector3(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+	auto diff = other - player;
+	auto middle = guiWindowSize * 0.5f;
+	auto loc = (middle + diff);
+	loc.clamp(guiWindowSize);
+	draw_list->AddCircleFilled(ImVec2(loc.x, loc.y), rad, color);
+}
+
 void do_render(GraphicsState* gfx, ImGuiIO io)
 {
     // ye who read this code, judge its performance (and lack of state caching) not
@@ -533,55 +547,56 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
     {
         std::lock_guard<std::mutex> lock(g_world_lock); // would be more efficient if we locked, gathered data, then unlocked, then rendered
 
+
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplSDL2_NewFrame(gfx->window);
+		ImGui::NewFrame();
+
+
+		if (RadarMenuActive)
+		{
+			ImGui::Begin("Settings", &RadarMenuActive, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_AlwaysAutoResize);
+			if (ImGui::BeginMenuBar())
+			{
+				if (ImGui::BeginMenu("File"))
+				{
+					if (ImGui::MenuItem("Close"))
+					{
+						RadarMenuActive = false;
+					}
+					ImGui::EndMenu();
+				}
+				ImGui::EndMenuBar();
+			}
+			ImGui::SliderFloat("FOV", &FOV, 1.0f, 100.0f);
+			ImGui::SameLine();
+			if (ImGui::Button("Reset"))
+			{
+				FOV = 59.0f;
+			}
+			ImGui::Checkbox("Radar Settings", &twod);
+			ImGui::Checkbox("Loot Settings", &loot);
+			ImGui::Text("% .1f FPS ", ImGui::GetIO().Framerate);
+			ImGui::End();
+		}
+
+		if (twod)
+		{
+			ImGui::Begin("Radar Settings", &twod);
+
+			ImGui::End();
+
+		}
+		if (loot)
+		{
+			ImGui::Begin("Loot Settings", &loot);
+
+			ImGui::End();
+		}
+
         if (tk::g_state && tk::g_state->map)
         {
-
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplSDL2_NewFrame(gfx->window);
-            ImGui::NewFrame();
-            {
-                if (RadarMenuActive)
-                {
-                    ImGui::Begin("Settings", &RadarMenuActive, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_AlwaysAutoResize);
-                    if (ImGui::BeginMenuBar())
-                    {
-                        if (ImGui::BeginMenu("File"))
-                        {
-                            if (ImGui::MenuItem("Close"))
-                            {
-                                RadarMenuActive = false;
-                            }
-                            ImGui::EndMenu();
-                        }
-                        ImGui::EndMenuBar();
-                    }
-                    ImGui::SliderFloat("FOV", &FOV, 1.0f, 100.0f);
-                    ImGui::SameLine();
-                    if(ImGui::Button("Reset"))
-                    {
-                        FOV = 59.0f;
-                    }
-                    ImGui::Checkbox("2D Radar", &twod);
-                    ImGui::Checkbox("Loot Filter", &loot);
-                    ImGui::Checkbox("Players", &players);
-                    ImGui::Text("% .1f FPS ", ImGui::GetIO().Framerate);
-                    ImGui::End();
-                }
-            }
-
-            if (twod)
-            {
-                ImGui::Begin("2D Radar", &twod);
-
-                ImGui::End();
-
-            }
-            if (loot)
-            {
-                ImGui::Begin("Loot Filter", &loot);
-
-                ImGui::End();
-            }
+			ImGui::Begin("Radar");
 
             glm::mat4 projection = glm::perspective(glm::radians(FOV), (float)gfx->width / (float)gfx->height, 0.1f, 2000.0f);
 
@@ -607,17 +622,7 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
             if (tk::Observer* player = tk::g_state->map->get_player(); player)
             {
                 player_y = player->pos.y;
-                float pitch = player->rot.y;
-                float yaw = player->rot.x;
                 glm::vec3 cam_at(player->pos.x, player->pos.y + 1.5f, player->pos.z);
-                player_forward_vec = get_forward_vec(pitch, yaw, cam_at);
-                glm::vec3 cam_look = cam_at + player_forward_vec;
-                glm::mat4 view = glm::lookAt(cam_at, cam_look, { 0.0f, 1.0f, 0.0f });
-
-                glUseProgram(gfx->shader);
-                glUniform1f(glGetUniformLocation(gfx->shader, "player_y"), player_y);
-                glUniformMatrix4fv(glGetUniformLocation(gfx->shader, "projection"), 1, GL_FALSE, &projection[0][0]);
-                glUniformMatrix4fv(glGetUniformLocation(gfx->shader, "view"), 1, GL_FALSE, &view[0][0]);
 
                 auto draw_text = [&gfx]
                     (float x, float y, float z, float scale, const char* txt, int r, int g, int b, int a, glm::mat4* view, glm::mat4* proj)
@@ -629,40 +634,6 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                     gltDrawText3D(text, x, y, z, scale, (GLfloat*)&view[0][0], (GLfloat*)&proj[0][0]);
                     gltEndDraw();
                     gltDeleteText(text);
-                };
-
-                auto draw_box = [&gfx]
-                    (float x, float y, float z, float scale_x, float scale_y, float scale_z, int r, int g, int b)
-                {
-                    glm::mat4 model = glm::mat4(1.0f);
-                    glm::vec3 pos(x, y, z);
-                    model = glm::translate(model, pos) * glm::scale(model, glm::vec3(scale_x, scale_y, scale_z));
-                    glUseProgram(gfx->shader);
-                    glUniform1i(glGetUniformLocation(gfx->shader, "line"), 0);
-                    glUniform1f(glGetUniformLocation(gfx->shader, "obj_y"), y - (scale_y / 2.0f));
-                    glUniform3f(glGetUniformLocation(gfx->shader, "color"), r / 255.0f, g / 255.0f, b / 255.0f);
-                    glUniformMatrix4fv(glGetUniformLocation(gfx->shader, "model"), 1, GL_FALSE, &model[0][0]);
-                    glBindVertexArray(gfx->vao);
-                    glBindBuffer(GL_ARRAY_BUFFER, gfx->vbo);
-                    glDrawArrays(GL_TRIANGLES, 0, 36);
-                };
-
-                auto draw_line = [&gfx]
-                    (float x, float y, float z, float to_x, float to_y, float to_z, int r, int g, int b, int a)
-                {
-                    float vertices[] =
-                    {
-                        x, y, z,
-                        to_x, to_y, to_z,
-                    };
-
-                    glUseProgram(gfx->shader);
-                    glUniform1i(glGetUniformLocation(gfx->shader, "line"), a);
-                    glUniform3f(glGetUniformLocation(gfx->shader, "color"), r / 255.0f, g / 255.0f, b / 255.0f);
-                    glBindBuffer(GL_ARRAY_BUFFER, gfx->line_vbo);
-                    glBindVertexArray(gfx->line_vao);
-                    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
-                    glDrawArrays(GL_LINES, 0, 2);
                 };
 
                 static std::unordered_map<std::string, std::tuple<uint8_t, uint8_t, uint8_t>> s_group_map; // maybe reset on map change?
@@ -723,10 +694,7 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                 {
                     if (obs->type == tk::Observer::Self)
                     {
-                        glm::vec3 at(obs->pos.x, obs->pos.y, obs->pos.z);
-                        glm::vec3 look = at + (get_forward_vec(obs->rot.y, obs->rot.x, at) * 50.0f);
-                        look.y += 1.5f;
-                        draw_line(at.x, at.y, at.z, look.x, look.y, look.z, 0, 255, 0, 255);
+						drawCircle(player->pos, obs->pos, circleRadius, ImColor(255, 0, 0));
                         continue;
                     }
 
@@ -794,15 +762,17 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                         bool facing_towards_player = glm::dot(player_forward_vec, enemy_forward_vec) < -0.0f;
                         int alpha = facing_towards_player ? 255 : 63;
                         glm::vec3 look = at + (enemy_forward_vec * (facing_towards_player ? 75.0f : 12.5f));
-                        draw_line(at.x, at.y, at.z, look.x, look.y, look.z, r, g, b, alpha);
+                        //draw_line(at.x, at.y, at.z, look.x, look.y, look.z, r, g, b, alpha);
                     }
 
-                    draw_box(obs->pos.x, obs->pos.y, obs->pos.z, scale_x, scale_y, scale_z, r, g, b);
+                    //draw_box(obs->pos.x, obs->pos.y, obs->pos.z, scale_x, scale_y, scale_z, r, g, b);
+					drawCircle(player->pos, obs->pos, circleRadius, ImColor(r, g, b));
                 }
 
                 for (Vector3* pos : tk::g_state->map->get_static_corpses())
                 {
-                    draw_box(pos->x, pos->y, pos->z, 2.0f, 1.0f, 1.0f, 102, 0, 102);
+                    //draw_box(pos->x, pos->y, pos->z, 2.0f, 1.0f, 1.0f, 102, 0, 102);
+					drawCircle(player->pos, *pos, circleRadius, ImColor(102, 0, 102));
                 }
 
                 std::vector<std::tuple<Vector3, std::string, int, int, int>> loot_text_to_render;
@@ -829,11 +799,12 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
 
                             if (draw_beam)
                             {
-                                draw_box(entry->pos.x, entry->pos.y + beam_height / 2.0f, entry->pos.z, 0.3f, beam_height, 0.3f, r, g, b);
+                                //draw_box(entry->pos.x, entry->pos.y + beam_height / 2.0f, entry->pos.z, 0.3f, beam_height, 0.3f, r, g, b);
                             }
                         }
 
-                        draw_box(entry->pos.x, entry->pos.y, entry->pos.z, 0.3f, 0.3f, 0.3f, r, g, b);
+                        //draw_box(entry->pos.x, entry->pos.y, entry->pos.z, 0.3f, 0.3f, 0.3f, r, g, b);
+						drawCircle(player->pos, entry->pos, circleRadius, ImColor(r, g, b));
                     }
                 };
 
@@ -844,8 +815,9 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
 
                 for (tk::TemporaryLoot* entry : tk::g_state->map->get_temporary_loots())
                 {
-                    draw_box(entry->pos.x, entry->pos.y + 1.5f, entry->pos.z, 0.15f, 3.0f, 0.15f, 0, 200, 200);
-                    draw_box(entry->pos.x, entry->pos.y, entry->pos.z, 0.25f, 0.25f, 0.25f, 0, 200, 200);
+                    //draw_box(entry->pos.x, entry->pos.y + 1.5f, entry->pos.z, 0.15f, 3.0f, 0.15f, 0, 200, 200);
+					drawCircle(player->pos, entry->pos, circleRadius, ImColor(0, 200, 200));
+                    //draw_box(entry->pos.x, entry->pos.y, entry->pos.z, 0.25f, 0.25f, 0.25f, 0, 200, 200);
                 }
 
                 for (tk::Observer* obs : tk::g_state->map->get_observers())
@@ -872,7 +844,7 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                     static constexpr float MIN_DISTANCE_FOR_DISTANCE = 30.0f;
                     if (float distance = glm::length(obs_pos - player_pos); distance >= MIN_DISTANCE_FOR_DISTANCE)
                     {
-                        draw_text(obs->pos.x, obs->pos.y + 3.0f, obs->pos.z, 0.25f, std::to_string((int)distance).c_str(), r, g, b, get_alpha_for_y(player_y, obs->pos.y), &view, &projection);
+                        //draw_text(obs->pos.x, obs->pos.y + 3.0f, obs->pos.z, 0.25f, std::to_string((int)distance).c_str(), r, g, b, get_alpha_for_y(player_y, obs->pos.y), &view, &projection);
                     }
 
                     int total_val = 0;
@@ -888,19 +860,21 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                     std::string val(16, '\0');
                     val.resize(snprintf(val.data(), val.size(), "%.1f", total_val / 1000.0f));
                     std::string name_and_val = obs->name + " (" + val + "k)";
-                    draw_text(obs->pos.x, obs->pos.y + 2.0f, obs->pos.z, 0.05f, name_and_val.c_str(), r, g, b, get_alpha_for_y(player_y, obs->pos.y), &view, &projection);
+                    //draw_text(obs->pos.x, obs->pos.y + 2.0f, obs->pos.z, 0.05f, name_and_val.c_str(), r, g, b, get_alpha_for_y(player_y, obs->pos.y), &view, &projection);
                 }
 
                 for (auto& [pos, txt, r, g, b] : loot_text_to_render)
                 {
-                    draw_text(pos.x, pos.y + 0.5f, pos.z, 0.05f, txt.c_str(), r, g, b, get_alpha_for_y(player_y, pos.y), &view, &projection);
+                    //draw_text(pos.x, pos.y + 0.5f, pos.z, 0.05f, txt.c_str(), r, g, b, get_alpha_for_y(player_y, pos.y), &view, &projection);
                 }
                 // TODO: Render
                 // Sort text by distance from camera and render in order to fix transparency overlap.
             }
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+			ImGui::End();
         }
+
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
 
     SDL_GL_SwapWindow(gfx->window);
