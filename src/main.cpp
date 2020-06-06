@@ -48,7 +48,7 @@
 
 
 #define LOCAL_ADAPTER_IP_ADDRESS "192.168.137.1" // ipconfig in cmd prompt on cheat machine, find local address, fill it in here
-#define MACHINE_PLAYING_GAME_IP_ADDRESS "192.168.137.9" // the local IP address of the machine communicating with EFT servers
+#define MACHINE_PLAYING_GAME_IP_ADDRESS "192.168.137.243" // the local IP address of the machine communicating with EFT servers
 
 struct Packet
 {
@@ -90,6 +90,44 @@ bool twod = false;
 bool loot = false;
 bool players = false;
 
+std::string ExePath()
+{
+    char buffer[MAX_PATH];
+    GetModuleFileName(NULL, buffer, MAX_PATH);
+    std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+    return std::string(buffer).substr(0, pos);
+}
+
+// Simple helper function to load an image into a OpenGL texture with common settings
+bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
+{
+    // Load from file
+    int image_width = 0;
+    int image_height = 0;
+    unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
+    if (image_data == NULL)
+        return false;
+
+    // Create a OpenGL texture identifier
+    GLuint image_texture;
+    glGenTextures(1, &image_texture);
+    glBindTexture(GL_TEXTURE_2D, image_texture);
+
+    // Setup filtering parameters for display
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Upload pixels into texture
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+    stbi_image_free(image_data);
+
+    *out_texture = image_texture;
+    *out_width = image_width;
+    *out_height = image_height;
+
+    return true;
+}
 
 class Floor
 {
@@ -100,8 +138,19 @@ public:
 
 	Floor(std::string fName)
 	{
-		LoadTextureFromFile(fName.c_str(), &texture, &width, &height);
+		IM_ASSERT(LoadTextureFromFile(fName.c_str(), &texture, &width, &height));
 	}
+
+    void drawImage(Vector3 player)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        auto guiWindowSize = Vector3(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+        auto topLeft = Vector3(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y);
+        auto middle = topLeft + (guiWindowSize * 0.5f);
+        middle = Vector3(middle.x - player.x, middle.y - player.y);
+        //loc.clamp(topLeft, topLeft + guiWindowSize);
+        draw_list->AddImage((void*)(intptr_t)texture, ImVec2(middle.x - width/2, middle.y - height/2), ImVec2(middle.x + width/2, middle.y + height/2));
+    }
 };
 
 class Map
@@ -257,7 +306,8 @@ int SDL_main(int argc, char* argv[])
     ImGui_ImplSDL2_InitForOpenGL(gfx.window, gfx.ctx);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-	factoryMap.floors.push_back(Floor(""));
+    std::string factoryPath = ExePath() + "\\Data\\8K Map Resolutions\\map_Factory_Ground_8K.jpg";
+	factoryMap.floors.push_back(Floor(factoryPath.c_str()));
 
 
 
@@ -563,36 +613,6 @@ bool get_loot_information(tk::LootEntry* entry, bool include_equipment, bool* dr
 }
 
 
-// Simple helper function to load an image into a OpenGL texture with common settings
-bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
-{
-	// Load from file
-	int image_width = 0;
-	int image_height = 0;
-	unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
-	if (image_data == NULL)
-		return false;
-
-	// Create a OpenGL texture identifier
-	GLuint image_texture;
-	glGenTextures(1, &image_texture);
-	glBindTexture(GL_TEXTURE_2D, image_texture);
-
-	// Setup filtering parameters for display
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	// Upload pixels into texture
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
-	stbi_image_free(image_data);
-
-	*out_texture = image_texture;
-	*out_width = image_width;
-	*out_height = image_height;
-
-	return true;
-}
 
 
 
@@ -693,9 +713,12 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
 			ImGui::End();
 		}
 
+        ImGui::Begin("Radar");
+
+        factoryMap.floors.front().drawImage(Vector3());
+
         if (tk::g_state && tk::g_state->map)
         {
-			ImGui::Begin("Radar");
             //ImGui::GetWindowDrawList()->AddCircleFilled(ImGui::GetCursorScreenPos(), 10.0f, ImColor(255, 0, 255));
 
 
@@ -724,6 +747,16 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
             {
                 player_y = player->pos.y;
                 glm::vec3 cam_at(player->pos.x, player->pos.y + 1.5f, player->pos.z);
+
+                ImGui::Begin("Player Data");
+                ImGui::Text("% .1f x", player->pos.x);
+                ImGui::Text("% .1f y", player->pos.y);
+                ImGui::Text("% .1f z", player->pos.z);
+                ImGui::End();
+
+                factoryMap.floors.front().drawImage(player->pos);
+
+
 
                 auto draw_text = [&gfx]
                     (float x, float y, float z, float scale, const char* txt, int r, int g, int b, int a, glm::mat4* view, glm::mat4* proj)
@@ -977,8 +1010,9 @@ void do_render(GraphicsState* gfx, ImGuiIO io)
                 // TODO: Render
                 // Sort text by distance from camera and render in order to fix transparency overlap.
             }
-			ImGui::End();
+			
         }
+        ImGui::End();
 
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

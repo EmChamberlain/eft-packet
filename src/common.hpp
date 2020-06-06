@@ -120,6 +120,7 @@ public:
 
 	static Vector3 fromDegrees(float deg)
 	{
+		//deg += 180.0f;
 		return Vector3(1*sin(deg * PI / 180.0f), -1*cos(deg * PI / 180.0f));
 
 	}
